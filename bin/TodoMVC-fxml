@@ -1,0 +1,26 @@
+#
+set -xe
+
+jdk=${JAVA_HOME:-/opt/jdk13}
+jfx=${JAVAFX_HOME:-/opt/jfx13}
+
+rm -fr build
+mkdir -p build
+
+$jdk/bin/javac \
+  -d build \
+  --module-path $jfx/lib --add-modules javafx.controls,javafx.fxml \
+  $(find src/TodoMVC-fxml -name '*.java')
+
+rm -f dist/TodoMVC-fxml
+mkdir -p dist
+
+$jdk/bin/jar cvf \
+  dist/TodoMVC-fxml.jar \
+  -C build .
+
+cd src/TodoMVC-fxml 
+$jdk/bin/jar uvf \
+  ../../dist/TodoMVC-fxml.jar \
+  $(find -name '*.png' -o -name '*.css' -o -name '*.fxml')
+

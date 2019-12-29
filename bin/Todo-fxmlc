@@ -1,0 +1,11 @@
+#
+set -xe
+
+jdk=${JAVA_HOME:-/opt/jdk13}
+jfx=${JAVAFX_HOME:-/opt/jfx13}
+
+$jdk/bin/java \
+  --module-path $jfx/lib --add-modules javafx.controls \
+  -cp dist/TodoMVC-fxmlc.jar:dist/fx.mvc.jar \
+  todomvc.fx.app.ReferenceApp
+
