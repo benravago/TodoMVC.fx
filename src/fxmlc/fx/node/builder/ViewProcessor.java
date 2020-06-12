@@ -6,7 +6,6 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import javax.tools.StandardLocation;
 import static javax.tools.Diagnostic.Kind.*;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -19,22 +18,8 @@ import javax.lang.model.element.TypeElement;
 
 import fx.mvc.View;
 import fx.mvc.Controller;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import javax.annotation.processing.ProcessingEnvironment;
 
 public class ViewProcessor extends AbstractProcessor {
-
-    List<Path> sourcePath;
-
-    @Override
-    public void init(ProcessingEnvironment processingEnv) {
-        super.init(processingEnv);
-        sourcePath = getSourcePath(processingEnv.getOptions().get("sourcepath"));
-    }
 
     @Override
     public SourceVersion getSupportedSourceVersion() {
@@ -111,8 +96,7 @@ public class ViewProcessor extends AbstractProcessor {
         }
         file += ".fxml";
         try {
-            var stream = fromSourcePath(path,file);
-            return stream != null ? stream : fromStandardPath(path,file);
+            return SourceFile.get(processingEnv,path,file).openInputStream();
         }
         catch (Exception nf) {
             processingEnv.getMessager().printMessage(WARNING,
@@ -121,43 +105,4 @@ public class ViewProcessor extends AbstractProcessor {
         }
     }
 
-    InputStream fromStandardPath(String path, String file) throws Exception {
-        return processingEnv.getFiler()
-               .getResource(StandardLocation.SOURCE_PATH,path,file)
-               .openInputStream();
-    }
-
-    InputStream fromSourcePath(String path, String file) throws Exception {
-        for (var dir:sourcePath) {
-            path = path.replace('.','/') + '/' + file;
-            var source = dir.resolve(path);
-            if (Files.isRegularFile(source)) {
-                return Files.newInputStream(source);
-            }
-        }
-        return null;
-    }
-
-    List<Path> getSourcePath(String paths) {
-        var list = new ArrayList<Path>();
-        if (paths != null && !paths.isBlank()) {
-            for (var p:paths.split(",")) {
-                if (p.isBlank()) continue;
-                var path = Paths.get(p.trim());
-                if (Files.isDirectory(path)) {
-                    list.add(path);
-                }
-            }
-        }
-        return list;
-    }
-
 }
-
-// Netbeans notes for SOURCE_PATH:
-//  1. check 'Run Compilation in External VM'
-//  2. add '-sourcepath src' to 'Additional Compiler Options'
-
-// Eclipse notes for SOURCE_PATH:
-//  1. enable annotation processing
-//  2. add '-Asourcepath=src' 

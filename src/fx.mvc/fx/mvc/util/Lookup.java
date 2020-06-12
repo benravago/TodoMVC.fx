@@ -17,6 +17,7 @@ public final class Lookup {
         this.root = root;
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T root() {
         return (T) root;
     }

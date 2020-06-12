@@ -49,6 +49,7 @@ public final class Load {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     public static <T> T instance(String className) {
         return (T) instance(defined(className));
     }

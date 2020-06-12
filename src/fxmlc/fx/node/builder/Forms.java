@@ -5,7 +5,9 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.List;
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.stream.Collectors;
 
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -25,7 +27,7 @@ class Forms {
         this.eu = eu;
         forms = new HashMap<>();
         shims = new HashMap<>();
-        imports = new LinkedList<>();
+        imports = new ArrayList<>();
         imports.add(new HashMap<>());
     }
 
@@ -39,7 +41,7 @@ class Forms {
 
     void addPackage(String packageName) {
         var map = new HashMap<String,String>();
-        for (var name : classesInPackage(packageName)) {
+        for (var name : classesIn(packageName)) {
             addName(map,name);
         }
         imports.add(map);
@@ -51,7 +53,7 @@ class Forms {
 
     void loadShims(String packageName) {
         shims.clear();
-        for (var shimName : classesInPackage(packageName)) {
+        for (var shimName : classesIn(packageName)) {
             Shim shim = newInstance(shimName);
             if (shim != null) {
                 var valueType = shim.type();
@@ -66,6 +68,7 @@ class Forms {
         return shimName != null ? newInstance(shimName) : null;
     }
 
+    @SuppressWarnings("unchecked")
     static <T> T newInstance(String className) {
         try {
             return (T) Class.forName(className).getConstructor().newInstance();
@@ -89,19 +92,6 @@ class Forms {
     String propertyType(String className, String propertyName) {
         var form = get(className);
         return form != null ? form.get(propertyName) : null;
-    }
-
-    List<String> classesInPackage(String packageName) {
-        var list = new LinkedList<String>();
-        var pe = eu.getPackageElement(packageName);
-        if (pe != null) {
-            for (var e : pe.getEnclosedElements()) {
-                if (e.getKind() == ElementKind.CLASS) {
-                    list.add(e.toString());
-                }
-            }
-        }
-        return list;
     }
 
     Form get(String className) {
@@ -161,6 +151,32 @@ class Forms {
     Form getSuperclass(TypeElement te) {
         var sc = te.getSuperclass();
         return sc != null ? get(elementName(sc)) : null;
+    }
+
+    List<String> classesIn(String packageName) {
+        var list = classesInBin(packageName);
+        return list.isEmpty() ? classesInJar(packageName.replace('.','/')) : list;
+    }
+
+    List<String> classesInBin(String packageName) {
+        var pe = eu.getPackageElement(packageName);
+        return pe != null ?
+            pe.getEnclosedElements().stream()
+              .filter(e -> e.getKind() == ElementKind.CLASS)
+              .map(e -> e.toString())
+              .collect(Collectors.toList())
+            : Collections.emptyList();
+    }
+
+    List<String> classesInJar(String packagePath) {
+        var url = getClass().getClassLoader().getResource(packagePath);
+        var pl = PathList.get(url,packagePath);
+        return pl != null ?
+            pl.map(p -> p.toString())
+              .filter(s -> s.endsWith(".class"))
+              .map(s -> s.substring(0,s.length()-6).replace('/','.'))
+              .collect(Collectors.toList())
+            : Collections.emptyList();
     }
 
 }

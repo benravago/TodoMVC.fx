@@ -1,6 +1,10 @@
 package fx.node.builder;
 
 import org.w3c.dom.Node;
+
+import java.util.HashMap;
+import java.util.regex.Pattern;
+
 import org.w3c.dom.Element;
 
 class NodeBuilder extends NodeScanner {
@@ -13,12 +17,40 @@ class NodeBuilder extends NodeScanner {
     String prologue() {
         return "package " + packageName + ";\n"
              + "@"+ controllerTag + "(\"" + controllerName + "\")\n"
-             + visibility + "class " + className + " {\n"
-             + visibility + "static " + nodeType + " root(" + controllerName + ' ' + controllerId +")\n";
+             + visibility + "class " + className + " { "
+             + visibility + "static " + nodeType + " root(" + controllerName + ' ' + controllerId +") {\n";
     }
     @Override
     String epilogue() {
-        return "}\n";
+        return "}}\n";
+    }
+
+    static final Pattern TIC = Pattern.compile("(`{1,2})(\\d+)",Pattern.MULTILINE);
+
+    @Override
+    String body() {
+        var index = 0;
+        var level = new HashMap<String,String>();
+
+        var s = new StringBuilder();
+        var t = doc.text();
+        var tic = TIC.matcher(t);
+        var a = 0;
+        while (tic.find(a)) {
+            var b = tic.start();
+            s.append(t,a,b);
+            a = tic.end();
+
+            var l = tic.group(2);
+            if (1 < tic.group(1).length()) {
+                var x = Integer.toString(++index);
+                level.put(l,x);
+                s.append('_').append(x);
+            } else {
+                s.append('_').append(level.get(l));
+            }
+        }
+        return s.append(t,a,t.length()).toString();
     }
 
     @Override
@@ -86,10 +118,8 @@ class NodeBuilder extends NodeScanner {
     }
 
     void translateAttribute(Element e, Node f, String cn, String cv) {
-        var fx = "";
         var d = cn.indexOf(':');
         if (d > 0) {
-            fx = cn;
             cn = cn.substring(d+1);
         }
         d = cn.indexOf('.');
@@ -143,45 +173,45 @@ class NodeBuilder extends NodeScanner {
 
     void TextContent(Element p, Element e, String str) {
         if (isList(p)) {
-            str = s( "_%d.add(%s);\n", level(p), str );
+            str = s( "`%d.add(%s);\n", level(p), str );
         }
         e.setTextContent(str);
     }
 
     void GetList(Element e) {
         var l = level(e);
-        enclose(e, s( "{ var _%d = _%d.get%s();\n", l, l-1, field(e) ), "}\n" );
+        enclose(e, s( "var ``%d = `%d.get%s();\n", l, l-1, field(e) ), "" );
     }
 
     void SetProperty(Element e) {
         var x = has(e,"_put") ? "" : ";\n";
         var l = level(e);
-        enclose(e, s( "{ var _%d = ", l ), s( "%s_%d.set%s(_%d); }\n", x, l-1, field(e), l ) );
+        enclose(e, s( "var ``%d = ", l ), s( "%s`%d.set%s(`%d);\n", x, l-1, field(e), l ) );
     }
 
     void PutProperty(Element e) {
         have(e.getParentNode(),"_put");
         var l = level(e);
-        enclose(e, s( "new %s(); var _%d=_%d;\n", typeOf(e), l, l-1 ), "");
+        enclose(e, s( "new %s(); var ``%d=`%d;\n", typeOf(e), l, l-1 ), "");
     }
 
     void AddItem(Element e, Element p) {
         var l = level(e);
         var g = isList(p) ? "" : ".getChildren()"; // optimistic!
-        enclose(e, s( "{ var _%d = new %s();\n", l, typeOf(e) ), s( "_%d%s.add(_%d); }\n", l-1, g, l ) );
+        enclose(e, s( "var ``%d = new %s();\n", l, typeOf(e) ), s( "`%d%s.add(`%d);\n", l-1, g, l ) );
     }
 
     void IncludeItem(Element e, Element p) {
         var source = source(e);
         var l = level(e);
         var g = isList(p) ? "" : ".getChildren()"; // optimistic!
-        enclose(e, s( "{ var _%d = %s(\"%s\",%s);\n", l, includeAction, packageName, source ),
-                   s( "_%d%s.add(_%d); }\n", l-1, g, l ) );
+        enclose(e, s( "var ``%d = %s(\"%s\",%s);\n", l, includeAction, packageName, source ),
+                   s( "`%d%s.add(`%d);\n", l-1, g, l ) );
     }
 
     void ReturnRoot(Element e) {
         var l = level(e);
-        enclose(e, s( "{ var _%d = new %s();\n", l, typeOf(e) ), s( "return _%d; }\n", l ) );
+        enclose(e, s( "var ``%d = new %s();\n", l, typeOf(e) ), s( "return `%d;\n", l ) );
     }
 
     void Unused(Element e, Node f, String cf, String cv, String p) {
@@ -189,43 +219,43 @@ class NodeBuilder extends NodeScanner {
     }
 
     void SetStatic(Element e, Node f, String cn, String cf, String cv) {
-        insert(e,f, s( "%s.set%s(_%d,%s);\n", cn, cf, level(e), cv ));
+        insert(e,f, s( "%s.set%s(`%d,%s);\n", cn, cf, level(e), cv ));
     }
 
     void SetPrimitive(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s);\n", level(e), cf, cv ));
+        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
     }
 
     void SetPlain(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s);\n", level(e), cf, cv ));
+        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
     }
 
     void SetColor(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(javafx.scene.paint.Color.%s);\n", level(e), cf, cv ));
+        insert(e,f, s( "`%d.set%s(javafx.scene.paint.Color.%s);\n", level(e), cf, cv ));
     }
 
     void SetEnum(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s);\n", level(e), cf, cv ));
+        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
     }
 
     void AddListItem(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.get%s().add(%s);\n", level(e), cf, cv ));
+        insert(e,f, s( "`%d.get%s().add(%s);\n", level(e), cf, cv ));
     }
 
     void SetReference(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s::%s);\n", level(e), cf, controllerId, cv ));
+        insert(e,f, s( "`%d.set%s(%s::%s);\n", level(e), cf, controllerId, cv ));
     }
 
     void SetReturned(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s.%s());\n", level(e), cf, controllerId, cv ));
+        insert(e,f, s( "`%d.set%s(%s.%s());\n", level(e), cf, controllerId, cv ));
     }
 
     void SetFunction(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s);\n", level(e), cf, cv ));
+        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
     }
 
     void SetExtern(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "_%d.set%s(%s.%s);\n", level(e), cf, controllerId, cv ));
+        insert(e,f, s( "`%d.set%s(%s.%s);\n", level(e), cf, controllerId, cv ));
     }
 
     String source(Element e) {

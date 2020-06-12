@@ -41,6 +41,7 @@ public final class Views {
         return loadController(defined(className));
     }
 
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     static <C,V> Pair<C,V> getController(Class<?> type, Function<Class<?>,Object> ctor) {
         var pair = controllerTypes(type);
         if (pair != null) {
@@ -90,6 +91,7 @@ public final class Views {
         return "";
     }
 
+    @SuppressWarnings("unchecked")
     static <T> T bind(Object controller, Class<?> view) {
         var tag = controller.getClass().getAnnotation(View.class);
         var nodeClass = defined(tag.nodeType());
@@ -100,11 +102,6 @@ public final class Views {
 
     static String nonNull(String s) {
         return s != null ? s : "";
-    }
-
-    static class T {
-        final Class<?> controller, view;
-        T(Class<?> c, Class<?> v) { controller=c; view=v; }
     }
 
 }

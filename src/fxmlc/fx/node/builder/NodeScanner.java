@@ -69,15 +69,12 @@ abstract class NodeScanner {
 
     abstract String prologue();
     abstract String epilogue();
-
-    String body() {
-        return doc.text();
-    }
+    abstract String body();
 
     void setVisibility() {
         var p = controllerName.lastIndexOf('.');
         if (p < 0) p = 0;
-        visibility = packageName.regionMatches​(0,controllerName,0,p) ? "" : "public ";
+        visibility = packageName.regionMatches(0,controllerName,0,p) ? "" : "public ";
     }
 
     void trimText(Node n) {
@@ -102,8 +99,8 @@ abstract class NodeScanner {
         if (tag.equals("fx:define")) {
             remove(e);
         }
-    }    
-    
+    }
+
     void setMetadata(Element e) {
         var tag = e.getTagName();
         var type = forms.fqcn(tag);
@@ -154,9 +151,9 @@ abstract class NodeScanner {
 
     static void insert(Node parent, Node child, Node last) {
         if (last != null) {
-            parent.insertBefore​(child,last);
+            parent.insertBefore(child,last);
         } else {
-            parent.appendChild​(child);
+            parent.appendChild(child);
         }
     }
 

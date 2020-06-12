@@ -4,6 +4,7 @@ public interface Bindable<T> {
 
     void bind(T object);
 
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     static <T> void bind(Object ref, T arg) {
         if (ref instanceof Bindable) {
             ((Bindable)ref).bind(arg);

@@ -38,10 +38,12 @@ class Doc {
         return doc.getDocumentElement().getTextContent();
     }
 
+    @SuppressWarnings("unchecked")
     <T extends Node> T rename(Node node, String newName) {
         return (T) doc.renameNode(node,null,newName);
     }
 
+    @SuppressWarnings("unchecked")
     <T extends Node> Doc forEach(String tagname, Consumer<T> consumer) {
         var list = doc.getElementsByTagName(tagname);
         for (int i = 0, n = list.getLength(); i < n; i++) {
@@ -50,6 +52,7 @@ class Doc {
         return this;
     }
 
+    @SuppressWarnings("unchecked")
     <T extends Node> Doc forEach(short nodeType, Consumer<T> consumer) {
         return forEach( n -> {
             if (n.getNodeType() == nodeType) consumer.accept((T)n);
@@ -99,6 +102,7 @@ class Doc {
         catch (Exception e) { uncheck(e); }
     }
 
+    @SuppressWarnings("unchecked")
     static <R,T extends Throwable> R uncheck(Throwable t) throws T { throw (T)t; }
 
 }

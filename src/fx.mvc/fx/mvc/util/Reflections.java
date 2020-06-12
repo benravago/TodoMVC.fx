@@ -33,7 +33,7 @@ final class Reflections {
         }
         return null;
     }
-    
+
     static Method method(Object obj, String name, Class<?>... parameters) {
         return (name == null || name.isBlank()) ? null
              : method(obj, m -> m.getName().equals(name) && accepts(m,parameters) );
