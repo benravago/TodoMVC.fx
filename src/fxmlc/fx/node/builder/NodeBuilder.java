@@ -25,7 +25,7 @@ class NodeBuilder extends NodeScanner {
         return "}}\n";
     }
 
-    static final Pattern TIC = Pattern.compile("(`{1,2})(\\d+)",Pattern.MULTILINE);
+    static final Pattern TIC = Pattern.compile("(`{1,3})(\\d+)(=\\d+)?",Pattern.MULTILINE);
 
     @Override
     String body() {
@@ -42,12 +42,19 @@ class NodeBuilder extends NodeScanner {
             a = tic.end();
 
             var l = tic.group(2);
-            if (1 < tic.group(1).length()) {
-                var x = Integer.toString(++index);
-                level.put(l,x);
-                s.append('_').append(x);
-            } else {
-                s.append('_').append(level.get(l));
+            switch (tic.group(1).length()) {
+                case 1 -> {
+                    s.append('_').append(level.get(l));
+                }
+                case 2 -> {
+                    var x = Integer.toString(++index);
+                    level.put(l,x);
+                    s.append('_').append(x);
+                }
+                case 3 -> {
+                    var x = tic.group(3).substring(1);
+                    level.put(l,level.get(x));
+                }
             }
         }
         return s.append(t,a,t.length()).toString();
@@ -192,7 +199,7 @@ class NodeBuilder extends NodeScanner {
     void PutProperty(Element e) {
         have(e.getParentNode(),"_put");
         var l = level(e);
-        enclose(e, s( "new %s(); var ``%d=`%d;\n", typeOf(e), l, l-1 ), "");
+        enclose(e, s( "new %s(); ```%d=%d;\n", typeOf(e), l, l-1 ), "");
     }
 
     void AddItem(Element e, Element p) {
