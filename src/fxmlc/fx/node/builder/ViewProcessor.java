@@ -1,6 +1,12 @@
 package fx.node.builder;
 
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Collections;
+import java.util.stream.Collectors;
 
 import java.io.InputStream;
 import java.io.IOException;
@@ -15,6 +21,9 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
 
 import fx.mvc.View;
 import fx.mvc.Controller;
@@ -42,7 +51,7 @@ public class ViewProcessor extends AbstractProcessor {
 
     void process(Set<? extends Element> set) {
         var eu = processingEnv.getElementUtils();
-        var builder = new NodeBuilder(new Forms(eu));
+        var builder = new NodeBuilder(forms(eu));
         for (var e:set) {
             var k = e.getKind();
             if (k == ElementKind.CLASS || k == ElementKind.INTERFACE) {
@@ -103,6 +112,69 @@ public class ViewProcessor extends AbstractProcessor {
                 path.replace('.','/')+'/'+file+" file not found in -sourcepath");
             return null;
         }
+    }
+
+    static String elementName(TypeMirror typeMirror) {
+        var s = typeMirror.toString();
+        var p = s.indexOf('<');
+        return p > 0 ? s.substring(0,p) : s;
+    }
+
+    Forms forms(Elements eu) {
+      return new Forms() {
+
+        @Override
+        Form makeForm(String className) {
+            var c = eu.getTypeElement(className);
+            return c == null ? null :
+                new Form(className,properties(c),interfaces(c),superclass(c));
+        }
+
+        Map<String,String> properties(TypeElement te) {
+            var map = new HashMap<String,String>();
+            for (var e : te.getEnclosedElements()) {
+                if (e.getKind() == ElementKind.METHOD) {
+                    var m = (ExecutableElement)e;
+                    // TODO: check parameter count = 0
+                    var name = property(m.getSimpleName().toString());
+                    if (name != null) {
+                        map.put(name,elementName(m.getReturnType()));
+                    }
+                }
+            }
+            return map;
+        }
+
+        Set<String> interfaces(TypeElement te) {
+            var set = new HashSet<String>();
+            for (var tm : te.getInterfaces()) {
+                set.add(elementName(tm));
+            }
+            return set;
+        }
+
+        Form superclass(TypeElement te) {
+            var sc = te.getSuperclass();
+            return sc != null ? get(elementName(sc)) : null;
+        }
+
+        @Override
+        List<String> classesIn(String packageName) {
+            var list = classesInBin(packageName);
+            return list.isEmpty() ? super.classesIn(packageName) : list;
+        }
+
+        List<String> classesInBin(String packageName) {
+            var pe = eu.getPackageElement(packageName);
+            return pe != null ?
+                pe.getEnclosedElements().stream()
+                  .filter(e -> e.getKind() == ElementKind.CLASS)
+                  .map(e -> e.toString())
+                  .collect(Collectors.toList())
+                : Collections.emptyList();
+        }
+
+      };
     }
 
 }

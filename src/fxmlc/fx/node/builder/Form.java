@@ -10,7 +10,7 @@ class Form {
     final String className;
     final Form superclass;
 
-    Form(Map<String,String> map, String className, Set<String> interfaces, Form superclass) {
+    Form(String className, Map<String,String> map, Set<String> interfaces, Form superclass) {
         this.map = map;
         this.className = className;
         this.interfaces = interfaces;
