@@ -95,7 +95,7 @@ public final class Views {
     static <T> T bind(Object controller, Class<?> view) {
         var tag = controller.getClass().getAnnotation(View.class);
         var nodeClass = defined(tag.nodeType());
-        var root = callStatic(view,"root",nodeClass,controller);
+        var root = callStatic(view,"view",nodeClass,controller);
         sendEvent( controller, OnLoad.class, new Event(root,null,Event.ANY) );
         return (T) root;
     }

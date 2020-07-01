@@ -86,11 +86,14 @@ public class ViewCompiler {
 
         var path = dir.resolve(file);
         try (var in = Files.newInputStream(path)) {
-            return builder
+            var text = builder
                 .setView(viewName,viewType)
                 .setController(controllerName,controllerTag)
                 .setInclude(includeType)
                 .transform(in);
+            System.out.println(
+                "generated "+viewName+" source file for "+controllerName);
+            return text;
         } catch (IOException e) {
             System.out.format("I/O error reading %s : %s\n", path.toString(), e.toString() );
             return null;

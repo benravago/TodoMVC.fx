@@ -18,7 +18,7 @@ class NodeBuilder extends NodeScanner {
         return "package " + packageName + ";\n"
              + "@"+ controllerTag + "(\"" + controllerName + "\")\n"
              + visibility + "class " + className + " { "
-             + visibility + "static " + nodeType + " root(" + controllerName + ' ' + controllerId +") {\n";
+             + visibility + "static " + nodeType + " view(" + controllerName + ' ' + controllerId +") {\n";
     }
     @Override
     String epilogue() {
