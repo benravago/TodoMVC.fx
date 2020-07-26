@@ -1,9 +1,9 @@
-package fx.mvc.util;
+package fx.mvc.runtime;
 
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-public class Running implements Future<Throwable> {
+class Running implements Future<Throwable> {
 
     private volatile boolean done;
     private volatile Throwable end;
