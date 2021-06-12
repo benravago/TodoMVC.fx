@@ -1,17 +1,2 @@
-More notes later.
+Update: added support for a JSON-based markup language; build scripts will need rework as well.
 
-For now, to build
-
-```
-bin/fx.mvc
-bin/fxmlc
-bin/TodoMVC-fxml
-bin/TodoMVC-fxmlc
-```
-
-then, to run
-
-```
-bin/Todo fxml
-bin/Todo fxmlc
-```
