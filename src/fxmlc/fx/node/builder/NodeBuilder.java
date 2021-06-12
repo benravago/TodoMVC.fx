@@ -1,274 +1,269 @@
 package fx.node.builder;
 
-import org.w3c.dom.Node;
+import java.util.Formatter;
+import java.text.MessageFormat;
 
-import java.util.HashMap;
-import java.util.regex.Pattern;
+import fx.node.builder.Beans.Bean;
+import fx.node.builder.Beans.Property;
+import static fx.node.builder.Beans.*;
 
-import org.w3c.dom.Element;
+import fx.util.FIFO;
+import fx.util.LIFO;
 
-class NodeBuilder extends NodeScanner {
+class NodeBuilder {
 
-    NodeBuilder(Forms resolver) {
-        super(resolver);
+  String packageName;
+  String simpleName;
+  String controllerName;
+
+  StringBuilder body = new StringBuilder();
+  Formatter formatter = new Formatter(body);
+
+  void format(String format, Object... args) {
+    formatter.format(format,args);
+  }
+
+  static final String viewTemplate =
+    "package {0};\n" +
+    "@fx.mvc.Controller(\"{0}.{1}\")\n" +
+    "class {2} '{' static javafx.scene.Parent view({0}.{1} _0) '{'\n" +
+    "{3}" +
+    "return _1;\n" +
+    "'}}'\n";
+
+  String view(String name) {
+    resolveNames(name);
+    return MessageFormat //         {0}             {1}         {2}   {3}
+      .format(viewTemplate, packageName, controllerName, simpleName, body );
+  }
+
+  Beans bp = Beans.get();
+  int nVar;
+  Scope let;
+  LIFO<Scope> scopes = new LIFO<>();
+
+  class Scope {
+    Scope(String n, String t) {
+      bean = bp.get(t);
+      name = n;
+      seq = ++nVar;
     }
+    Bean bean;
+    String name;
+    int seq;
+    FIFO<Object> args = new FIFO<>(); // either constructor(args) or list.{add,addAll}(args)
+    @Override public String toString() { return "_"+seq; }
+  }
 
-    @Override
-    String prologue() {
-        return "package " + packageName + ";\n"
-             + "@"+ controllerTag + "(\"" + controllerName + "\")\n"
-             + visibility + "class " + className + " { "
-             + visibility + "static " + nodeType + " view(" + controllerName + ' ' + controllerId +") {\n";
+  void setPackage(String name) {
+    packageName = name;
+  }
+  void addImport(String name) {
+    bp.put(name);
+  }
+
+  void newVar(String name, String type) {
+    let = new Scope(name,type);
+  }
+  void varArg(Object value) {
+    let.args.add(value);
+  }
+  void argEnd() {
+    var ctor = specialVar(let);
+    if (ctor != null) {
+      format("var _%d = %s;\n", let.seq, ctor);
+    } else {
+      var args = collect(let.args);
+      format("var _%d = new %s(%s);\n", let.seq, let.bean.type, args);
     }
-    @Override
-    String epilogue() {
-        return "}}\n";
+    if (let.name != null) {
+      setProperty(let.name,let);
+    } else {
+      var s = scopes.peek();
+      if (s != null) s.args.add(let);
     }
+  }
 
-    static final Pattern TIC = Pattern.compile("(`{1,3})(\\d+)(=\\d+)?",Pattern.MULTILINE);
+  void newList(String tag) {
+    scopes.peek().args.add(tag); // remember tag
+  }
+  void listEnd() {
+    var s = scopes.peek();
+    var c = collect(s.args);
+    var i = c.indexOf(',');
+    var all = c.indexOf(',',i+1) > 0 ? "All" : "";
+    format("_%d.get%s().add%s(%s);\n", s.seq, proper(c.substring(0,i)), all, c.substring(i+1) );
+  }
 
-    @Override
-    String body() {
-        var index = 0;
-        var level = new HashMap<String,String>();
+  void addItem() { // _1.getChildren().add(_3);
+    var s = scopes.peek();
+    format("_%d.get%s().add(_%d);\n", s.seq, bp.defaultProperty(s.bean), let.seq);
+    let = s;
+  }
 
-        var s = new StringBuilder();
-        var t = doc.text();
-        var tic = TIC.matcher(t);
-        var a = 0;
-        while (tic.find(a)) {
-            var b = tic.start();
-            s.append(t,a,b);
-            a = tic.end();
-
-            var l = tic.group(2);
-            switch (tic.group(1).length()) {
-                case 1 -> {
-                    s.append('_').append(level.get(l));
-                }
-                case 2 -> {
-                    var x = Integer.toString(++index);
-                    level.put(l,x);
-                    s.append('_').append(x);
-                }
-                case 3 -> {
-                    var x = tic.group(3).substring(1);
-                    level.put(l,level.get(x));
-                }
-            }
-        }
-        return s.append(t,a,t.length()).toString();
+  void varBody(String name) {
+    if (name == null) {
+      scopes.push(let);
     }
+    // TODO: handle 'name: {...}' ?
+  }
+  void bodyEnd() {
+    scopes.pop();
+  }
 
-    @Override
-    void translateElement(Element e) {
-        var p = parent(e);
-        if (p == null) {
-            ReturnRoot(e);
-        } else {
-            var str = shimFor(e);
-            if (str != null) {
-                TextContent(p,e,str);
-                return;
-            } else {
-                if (isList(e)) {
-                    GetList(e);
-                } else {
-                    if (typeOf(e) != null) {
-                        if (typeOf(p) != null || isList(p)) {
-                            AddItem(e,p);
-                        } else {
-                            PutProperty(e);
-                        }
-                    } else {
-                        if ("fx:include".equals(e.getTagName())) {
-                            IncludeItem(e,p);
-                        } else {
-                            SetProperty(e);
-                        }
-                    }
-                }
-            }
-        }
-        translateAttributes(e);
+  void setProperty(String property, Object value) {
+    int i = property.indexOf('.');
+    if (i < 0) {
+      local(property,value);
+    } else {
+      if (isSpecial(property)) {
+        special(property,value);
+      } else {
+        global(property,i,value);
+      }
     }
+  }
 
-    @Override
-    void translateAttributes(Element e) {
-        var f = e.getFirstChild().getNextSibling();
-        var m = e.getAttributes();
-        var n = m.getLength();
-        if (n < 1) return;
-        for (var i = 0; i < n; i++) {
-            var a = m.item(i);
-            var name = a.getNodeName();
-            if (ignore(name)) continue;
-            var value = a.getNodeValue();
-            if (!specialAttribute(name,value)) {
-                translateAttribute(e,f,name,value);
-            }
-        }
-    }
+  static boolean isSpecial(String s) {
+    return s.startsWith("fx.");
+  }
 
-    static boolean ignore(String n) {
-        return n.startsWith("_") || n.startsWith("xmlns:") || n.equals("xmlns");
+  void special(String property, Object value) {
+    switch (property) {
+      case "fx.controller" -> { controllerName = String.valueOf(value); }
+      case "fx.id" -> { local("id",value); }
+      default -> format("// special %s `%s`\n", property, value);
     }
+  }
 
-    boolean specialAttribute(String name, String value) {
-        if ("fx:controller".equals(name)) {
-            if (controllerName == null) {
-                controllerName = value;
-            }
-            return true;
-        }
-        return false;
-    }
+  void global(String property, int dot, Object value) {
+    var s = scopes.peek();
+    var b = bp.get(property.substring(0,dot)); // n[0] = type
+    property = property.substring(dot+1);      // n[1] = property
+    var p = b.get(property);
+    var c = resolve(p,value);
+    format("%s.set%s(_%d,%s);\n", b.type, p.name, s.seq, c[2] );
+  }
 
-    void translateAttribute(Element e, Node f, String cn, String cv) {
-        var d = cn.indexOf(':');
-        if (d > 0) {
-            cn = cn.substring(d+1);
-        }
-        d = cn.indexOf('.');
-        if (d > 0) {
-            parentAttribute(e,f,cn.substring(0,d),cn.substring(d+1),cv);
-        } else {
-            var p = forms.propertyType(typeOf(e),cn);
-            if (p != null) {
-                var cf = field(cn);
-                if (isPrimitive(p)){
-                    SetPrimitive(e,f,cf,cv);
-                } else if (p.equals("java.lang.String")) {
-                    SetPlain(e,f,cf,resolve(cv));
-                } else if (forms.isA(p,"java.lang.Enum")) {
-                    SetEnum(e,f,cf,enumOf(p,cv));
-                } else if (forms.isA(p,"java.util.List")) {
-                    AddListItem(e,f,cf,resolve(cv));
-                } else if (forms.isA(p,"javafx.event.EventHandler")) {
-                    eventHandler(e,f,cf,cv);
-                } else if (p.equals("java.lang.Object")) {
-                    SetPlain(e,f,cf,resolve(cv));
-                } else if (p.equals("javafx.scene.paint.Paint")) {
-                    SetColor(e,f,cf,cv.toUpperCase());
-                } else if (cv.startsWith("$")) {
-                    SetExtern(e,f,cf,cv.substring(1));
-                } else if (p.endsWith("[]")) {
-                    SetPlain(e,f,cf,cv);
-                } else {
-                    Unused(e,f,cn,cv,p);
-                }
-            } else {
-                Unused(e,f,cn,cv,p);
-            }
-        }
-    }
+  void local(String property, Object value) {
+    var s = scopes.peek();
+    var p = s.bean.get(property);
+    var c = resolve(p,value);
+    format("_%d.%s%s%s(%s);\n", s.seq, c[0], p.name, c[1], c[2] );
+  }
 
-    void parentAttribute(Element e, Node f, String cn, String cf, String cv) {
-        var fqcn = forms.fqcn(cn);
-        var ct = forms.get(fqcn).get(cf);
-        if (ct.startsWith("javafx.")) cv = ct + '.' + cv; // optimistic
-        SetStatic(e,f, fqcn, field(cf), cv );
+  // { String prefix, suffix, value; }
+  String[] resolve(Property p, Object v) {
+    var t = p.kind;
+    if (t == ARRAY) {
+      return new String[]{ "get", "().add", coerce(p.component,v) }; // isA(p.item)
+    } else {
+      var s = (t == OBJECT) ? object(p,v) : coerce(t,v);
+      return new String[]{ "set", "", s };
     }
+  }
 
-    void eventHandler(Element e, Node f, String cf, String cv) {
-        switch (cv.charAt(0)) {
-            case '#': SetReference(e,f,cf,cv.substring(1)); break;
-            case '$': SetReturned(e,f,cf,cv.substring(1)); break;
-            default:  SetFunction(e,f,cf,cv); break;
-        }
+  static String coerce(int isA, Object v) {
+    if (v instanceof Scope s) {
+      return s.toString();
     }
+    return switch (isA) {
+      case NUMBER, BOOLEAN -> String.valueOf(v);
+      case STRING -> quote(v);
+      case NULL -> "null";
+      // case ARRAY, OBJECT
+      default -> "?"+isA+'`'+v+'`';
+    };
+  }
 
-    void TextContent(Element p, Element e, String str) {
-        if (isList(p)) {
-            str = s( "`%d.add(%s);\n", level(p), str );
-        }
-        e.setTextContent(str);
+  String object(Property p, Object v) {
+    if (v instanceof String s) {
+      if (bp.isAssignable(p.type, "java.lang.Enum")) { // (Enum.class.isAssignableFrom(p.type)) {
+        var i = s.lastIndexOf('.');
+        var e = i < 0 ? s : s.substring(i+1);
+        return p.type + '.' + e.toUpperCase(); // p.type.getName() + '.' + e.toUpperCase();
+      } else {
+        return reference(s);
+      }
     }
+    return String.valueOf(v);
+  }
 
-    void GetList(Element e) {
-        var l = level(e);
-        enclose(e, s( "var ``%d = `%d.get%s();\n", l, l-1, field(e) ), "" );
-    }
+  String reference(String s) {
+    return switch(s.charAt(0)) {
+      case '@' -> resource(s);
+      case '#' -> function(s);
+      default -> quote(s);
+    };
+  }
 
-    void SetProperty(Element e) {
-        var x = has(e,"_put") ? "" : ";\n";
-        var l = level(e);
-        enclose(e, s( "var ``%d = ", l ), s( "%s`%d.set%s(`%d);\n", x, l-1, field(e), l ) );
-    }
+  String function(String s) {
+    var ref = s.substring(1);
+    controllerReferences.add(ref);
+    return "_0::" + ref;
+  }
 
-    void PutProperty(Element e) {
-        have(e.getParentNode(),"_put");
-        var l = level(e);
-        enclose(e, s( "new %s(); ```%d=%d;\n", typeOf(e), l, l-1 ), "");
-    }
+  static String resource(String s) {
+    return "_0.getClass().getResource(\"" + s.substring(1) + "\").toString()";
+  }
 
-    void AddItem(Element e, Element p) {
-        var l = level(e);
-        var g = isList(p) ? "" : ".getChildren()"; // optimistic!
-        enclose(e, s( "var ``%d = new %s();\n", l, typeOf(e) ), s( "`%d%s.add(`%d);\n", l-1, g, l ) );
-    }
+  static String quote(Object v) {
+    return "\"" + v + '"'; // TODO: encode " chars in v
+  }
 
-    void IncludeItem(Element e, Element p) {
-        var source = source(e);
-        var l = level(e);
-        var g = isList(p) ? "" : ".getChildren()"; // optimistic!
-        enclose(e, s( "var ``%d = %s(\"%s\",%s);\n", l, includeAction, packageName, source ),
-                   s( "`%d%s.add(`%d);\n", l-1, g, l ) );
+  static String collect(FIFO<Object> args) {
+    if (args.isEmpty()) return "";
+    var s = new StringBuilder();
+    for (var a:args) {
+      s.append(',').append(String.valueOf(a));
     }
+    args.clear(); // clean-up the collector
+    return s.substring(1);
+  }
 
-    void ReturnRoot(Element e) {
-        var l = level(e);
-        enclose(e, s( "var ``%d = new %s();\n", l, typeOf(e) ), s( "return `%d;\n", l ) );
+  void resolveNames(String name) {
+    var i = name.lastIndexOf('.');
+    if (i < 0) {
+      packageName = null;
+      simpleName = name;
+    } else {
+      packageName = name.substring(0,i);
+      simpleName = name.substring(i+1);
     }
+    if (controllerName == null) {
+      controllerName = "None";
+    }
+    if (packageName == null) {
+      var p = controllerName.lastIndexOf('.');
+      packageName = p < 0 ? "none" : controllerName.substring(0,p);
+    }
+    if (controllerName.startsWith(packageName+'.')) {
+      controllerName = controllerName.substring(packageName.length()+1);
+    }
+  }
 
-    void Unused(Element e, Node f, String cf, String cv, String p) {
-        insert(e,f, s( "// %s = %s >> %s\n", cf, cv, p ));
+  String specialVar(Scope s) {
+    if (bp.isSameType(s.bean.type, "java.net.URL")) { // s.bean.type == java.net.URL.class
+      var args = collect(s.args);
+      if (!args.isEmpty()) return reference(args);
     }
+    return null;
+  }
 
-    void SetStatic(Element e, Node f, String cn, String cf, String cv) {
-        insert(e,f, s( "%s.set%s(`%d,%s);\n", cn, cf, level(e), cv ));
-    }
+  FIFO<String> controllerReferences = new FIFO<>();
 
-    void SetPrimitive(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
-    }
+/*
+   static String controllerTemplate =
+     "package example;
+     "@fx.mvc.View("example.Login")
+     "interface LoginController {
+     "void handleSubmitButtonAction(javafx.event.ActionEvent e);
+     "}
 
-    void SetPlain(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
-    }
-
-    void SetColor(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(javafx.scene.paint.Color.%s);\n", level(e), cf, cv ));
-    }
-
-    void SetEnum(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
-    }
-
-    void AddListItem(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.get%s().add(%s);\n", level(e), cf, cv ));
-    }
-
-    void SetReference(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s::%s);\n", level(e), cf, controllerId, cv ));
-    }
-
-    void SetReturned(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s.%s());\n", level(e), cf, controllerId, cv ));
-    }
-
-    void SetFunction(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s);\n", level(e), cf, cv ));
-    }
-
-    void SetExtern(Element e, Node f, String cf, String cv) {
-        insert(e,f, s( "`%d.set%s(%s.%s);\n", level(e), cf, controllerId, cv ));
-    }
-
-    String source(Element e) {
-        var source = e.getAttribute("source");
-        e.removeAttribute("source");
-        return resolve(source);
-    }
+   String controller() {
+     1. generate controllerReference body
+     2. generate text from controllerTemplate
+   }
+*/
 
 }

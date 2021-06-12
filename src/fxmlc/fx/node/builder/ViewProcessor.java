@@ -1,180 +1,145 @@
 package fx.node.builder;
 
-import java.util.Map;
-import java.util.HashMap;
 import java.util.Set;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Collections;
-import java.util.stream.Collectors;
+import java.util.Optional;
+import java.util.function.BiFunction;
 
-import java.io.InputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import javax.tools.FileObject;
 import static javax.tools.Diagnostic.Kind.*;
 
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
 
 import fx.mvc.View;
-import fx.mvc.Controller;
 
 public class ViewProcessor extends AbstractProcessor {
 
-    @Override
-    public SourceVersion getSupportedSourceVersion() {
-        return SourceVersion.latest();
+  @Override
+  public void init(ProcessingEnvironment pe) {
+    super.init(pe);
+    Beans.provider = () -> new Refractor(processingEnv);
+  }
+
+  @Override
+  public SourceVersion getSupportedSourceVersion() {
+    return SourceVersion.latest();
+  }
+
+  @Override
+  public Set<String> getSupportedAnnotationTypes() {
+    return Set.of(View.class.getName());
+  }
+
+  @Override
+  public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+    roundEnv.getElementsAnnotatedWith(View.class)
+      .stream()
+      .filter(e -> e.getKind() == ElementKind.CLASS)
+      .map(e -> new Job(e, e.getAnnotation(View.class).value()) )
+      .map(j -> { return j.view.isBlank() ? Optional.<Job>empty() : Optional.of(j); })
+      .forEach(j ->
+        j.map(this::findSource)
+         .map(this::getTransform)
+         .map(this::generateCode)
+         .ifPresent(k ->
+            note("generated " + k.view + " source file for " + k.element)
+         )
+      );
+    return true;
+  }
+
+  record Job(Element element, String view) {}
+
+  Source findSource(Job job) {
+    var p = splitPath(job.view); // view is fqcn format -> package.path.Class
+    var file = findResource( p[0], p[1]+".jbml" );
+    if (file == null) {
+      file = findResource( p[0], p[1]+".fxml" );
     }
-
-    @Override
-    public Set<String> getSupportedAnnotationTypes() {
-        return Set.of(View.class.getName());
+    if (file == null) {
+      error("no markup file found for " + job.view + " in -sourcepath");
+      return null;
     }
+    return new Source(job,file);
+  }
 
-    @Override
-    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        var set = roundEnv.getElementsAnnotatedWith(View.class);
-        if (!set.isEmpty()) {
-            process(set);
-        }
-        return true;
-    }
+  record Source(Job job, FileObject file) {}
 
-    void process(Set<? extends Element> set) {
-        var eu = processingEnv.getElementUtils();
-        var builder = new NodeBuilder(forms(eu));
-        for (var e:set) {
-            var k = e.getKind();
-            if (k == ElementKind.CLASS || k == ElementKind.INTERFACE) {
-                process(builder,(TypeElement)e);
-            }
-        }
-    }
-
-    void process(NodeBuilder builder, TypeElement e) {
-        var controller = (TypeElement)e;
-        var view = controller.getAnnotation(View.class);
-        var code = generateCode( builder, controller, view );
-        if (code != null) {
-            var viewName = view.value();
-            storeCode( code, viewName );
-            processingEnv.getMessager().printMessage(NOTE,
-                "generated "+viewName+" source file for "+controller);
-        }
-    }
-
-    void storeCode(String code, String className) {
-        try ( var out = processingEnv.getFiler().createSourceFile(className).openWriter() ) {
-            out.write(code);
-        }
-        catch (IOException e) { throw new UncheckedIOException(e); }
-    }
-
-    String generateCode(NodeBuilder builder, TypeElement controller, View view) {
-        var viewName = view.value();
-        try ( var in = getInputStream(viewName) ) {
-            if (in == null) return null;
-            var viewType = view.nodeType();
-            var includeType = view.includeType();
-            var controllerTag = Controller.class.getName();
-            var controllerName = controller.toString();
-            return builder
-                .setView(viewName,viewType)
-                .setController(controllerName,controllerTag)
-                .setInclude(includeType)
-                .transform(in);
-        }
-        catch (IOException e) { throw new UncheckedIOException(e); }
-    }
-
-    InputStream getInputStream(String file) {
-        String path = "";
-        var p = file.lastIndexOf('.');
-        if (p > -1) {
-            path = file.substring(0,p);
-            file = file.substring(p+1);
-        }
-        file += ".fxml";
-        try {
-            return SourceFile.get(processingEnv,path,file).openInputStream();
-        }
-        catch (Exception nf) {
-            processingEnv.getMessager().printMessage(WARNING,
-                path.replace('.','/')+'/'+file+" file not found in -sourcepath");
-            return null;
-        }
-    }
-
-    static String elementName(TypeMirror typeMirror) {
-        var s = typeMirror.toString();
-        var p = s.indexOf('<');
-        return p > 0 ? s.substring(0,p) : s;
-    }
-
-    Forms forms(Elements eu) {
-      return new Forms() {
-
-        @Override
-        Form makeForm(String className) {
-            var c = eu.getTypeElement(className);
-            return c == null ? null :
-                new Form(className,properties(c),interfaces(c),superclass(c));
-        }
-
-        Map<String,String> properties(TypeElement te) {
-            var map = new HashMap<String,String>();
-            for (var e : te.getEnclosedElements()) {
-                if (e.getKind() == ElementKind.METHOD) {
-                    var m = (ExecutableElement)e;
-                    // TODO: check parameter count = 0
-                    var name = property(m.getSimpleName().toString());
-                    if (name != null) {
-                        map.put(name,elementName(m.getReturnType()));
-                    }
-                }
-            }
-            return map;
-        }
-
-        Set<String> interfaces(TypeElement te) {
-            var set = new HashSet<String>();
-            for (var tm : te.getInterfaces()) {
-                set.add(elementName(tm));
-            }
-            return set;
-        }
-
-        Form superclass(TypeElement te) {
-            var sc = te.getSuperclass();
-            return sc != null ? get(elementName(sc)) : null;
-        }
-
-        @Override
-        List<String> classesIn(String packageName) {
-            var list = classesInBin(packageName);
-            return list.isEmpty() ? super.classesIn(packageName) : list;
-        }
-
-        List<String> classesInBin(String packageName) {
-            var pe = eu.getPackageElement(packageName);
-            return pe != null ?
-                pe.getEnclosedElements().stream()
-                  .filter(e -> e.getKind() == ElementKind.CLASS)
-                  .map(e -> e.toString())
-                  .collect(Collectors.toList())
-                : Collections.emptyList();
-        }
-
+  Transform getTransform(Source src) {
+    var f = src.file.getName();
+    var s = f.substring(f.length()-5);
+    BiFunction<String,char[],String> form =
+      switch (s) {
+        case ".jbml" -> this::jbmlTransform;
+        case ".fxml" -> this::fxmlTransform;
+        default -> null;
       };
+    if (form == null) {
+      error("no markup/transform available for "+src.job.view);
+      return null;
     }
+    return new Transform(src.job, src.file, form);
+  }
+
+  record Transform(Job job, FileObject file, BiFunction<String,char[],String> form) {}
+
+  Job generateCode(Transform gen) {
+    var in = readChars(gen.file);
+    var out = gen.form.apply(gen.job.view, in);
+    writeChars(gen.job.view, out);
+    return gen.job;
+  }
+
+  void note(String msg) { processingEnv.getMessager().printMessage(NOTE,msg); }
+  void warn(String msg) { processingEnv.getMessager().printMessage(WARNING,msg); }
+  void error(String msg) { processingEnv.getMessager().printMessage(ERROR,msg); }
+
+  static String[] splitPath(String s) {
+    var i = s.lastIndexOf('.');
+    return i < 0 ? new String[]{ "", s }
+                 : new String[]{ s.substring(0,i), s.substring(i+1) };
+  }
+
+  FileObject findResource(String pkg, String file) { // add suffix
+    try { return SourceFile.get(processingEnv, pkg, file); }
+    catch (Exception ignore) { return null; }
+  }
+
+  char[] readChars(FileObject file) {
+    try {
+      var text = file.getCharContent(true).toString();
+      return text.isBlank() ? new char[0] : text.toCharArray();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  void writeChars(String className, String text) {
+    if (text.isBlank()) return;
+    try (var out = processingEnv.getFiler().createSourceFile(className).openWriter()) {
+      out.write(text);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  String jbmlTransform(String view, char[] src) {
+    if (src.length == 0) return "";
+    return new JbmlDriver().transform(view,src);
+  }
+
+  String fxmlTransform(String view, char[] src) {
+    if (src.length == 0) return "";
+    return new FxmlDriver().transform(view,src);
+  }
 
 }

@@ -3,177 +3,156 @@ package fx.node.builder;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.Files;
-import java.nio.file.FileSystems;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.ArrayList;
 import java.util.HashSet;
-
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
-import fx.mvc.View;
-import fx.mvc.Controller;
-import javafx.application.Platform;
+// TODO: ViewCompiler -s <directory> -> specify where to place generated source files
+//                    -c             -> generate class prototypes
+//                    <file|glob> ... ->
 
 public class ViewCompiler {
-    public static void main(String...args) throws Exception {
-        Platform.startup(() -> new ViewCompiler().start(args));
+  public static void main(String...args) throws Exception {
+    if (args.length > 0) {
+      new ViewCompiler().start(args);
+    } else {
+      System.out.println("usage: ViewCompiler -s <directory> [-c] <file|glob> ...");
+    }
+  }
+
+  void start(String...args) throws Exception {
+
+    var files = new ArrayList<String>();
+    var proto = false;
+    Path dir = null;
+
+    for (var i = 0; i < args.length; i++) {
+      switch (args[i]) {
+        case "-s" -> dir = Paths.get(args[++i]);
+        case "-c" -> proto = true;
+        default -> files.add(args[i]);
+      }
     }
 
-    void start(String...args) {
-        if (args.length > 0) {
-            var path = Paths.get(args[0]);
-            if (Files.isDirectory(path)) {
-                findFiles(path,args,1);
-                System.exit(0);
-            }
+    Beans.provider = () -> new Reflector();
+    generate(dir,files,proto);
+  }
+
+  void generate(Path dir, List<String> files, boolean proto) {
+    for (var file : find(files)) {
+
+      var gen = new NodeBuilder();
+      var part = fileName(file);
+      switch (part.suffix) {
+        case "fxml" -> new FxmlDriver().transform(readChars(file),gen);
+        case "jbml" -> new JbmlDriver().transform(readChars(file),gen);
+        default -> {
+          System.out.printf("skipping %s\n", file.toString());
+          continue;
         }
-        System.err.println("usage: ViewCompiler [directory [file|glob]] ...");
-        System.exit(1);
+      }
+      var text = gen.view(part.name);
+      var dest = target(dir,file,gen.packageName,part.name);
+      writeChars(dest,text);
+      System.out.printf("generated %s from %s\n", dest.toString(), file.toString());
+
+      if (proto) {
+        // TODO: generate prorotype.java and store
+        prototypePart();
+      }
     }
+  }
 
-    NodeBuilder builder = new NodeBuilder(forms());
-
-    void findFiles(Path dir, String[] args, int i) {
-        var gc = Pattern.compile("[*?]").matcher("");
-        while (i < args.length) {
-            var arg = args[i++];
-            if (gc.reset(arg).find()) {
-                findFiles(dir,arg);
-            } else {
-                var path = Paths.get(arg);
-                if (Files.isDirectory(path)) {
-                    dir = path;
-                } else {
-                    path = dir.resolve(path);
-                    if (Files.isRegularFile(path)) {
-                        process(dir,path);
-                    } else {
-                        System.err.format("argument %d '%s' ignored\n",(i-1),arg);
-                    }
-                }
-            }
-        }
+  Path target(Path dir, Path file, String pkg, String name) {
+    if (dir == null) {
+      dir = file.getParent();
+    } else {
+      name = (pkg+'.'+name).replace('.','/');
     }
+    return mkDirs(dir.resolve(name+".java"));
+  }
 
-    void findFiles(Path dir, String pattern) {
-        var glob = FileSystems.getDefault().getPathMatcher("glob:"+pattern);
-        PathList.walk(dir)
-            .filter(Files::isRegularFile)
-            .filter(glob::matches)
-            .forEach(file -> process(dir,file));
+  void prototypePart() {} // TODO:
+
+  static Pattern glob = Pattern.compile("[\\*\\?\\[\\{]");
+
+  Set<Path> find(List<String> list) {
+    var files = new HashSet<Path>();
+    for (var path:list) {
+      var m = glob.matcher(path);
+      if (m.find()) {
+        findAll(files,path,m.start());
+      } else {
+        findOne(files,path);
+      }
     }
+    return files;
+  }
 
-    void process(Path dir, Path file) {
-        file = dir.relativize(file);
-        var text = generateCode(dir,file);
-        if (text != null) {
-            storeCode(dir,file,text);
-        }
+  void findOne(Set<Path> set, String path) {
+    var file = Paths.get(path);
+    if (Files.isRegularFile(file)) {
+      set.add(file);
+    } else {
+      System.out.println("file not found: "+path);
     }
+  }
 
-    String generateCode(Path dir, Path file) {
+  void findAll(Set<Path> set, String path, int index) {
+    var n = set.size();
+    var dir = path.substring(0, path.lastIndexOf('/', index));
+    var root = Paths.get(dir);
+    var matcher = FileSystems.getDefault().getPathMatcher("glob:" + path);
 
-        var viewName = fileName(file).replace('/','.');
-        var controllerName = viewName + "Controller";
-        var controllerTag = Controller.class.getName();
-        var viewType = defaultValue(View.class,"nodeType");
-        var includeType = defaultValue(View.class,"includeType");
-
-        var path = dir.resolve(file);
-        try (var in = Files.newInputStream(path)) {
-            var text = builder
-                .setView(viewName,viewType)
-                .setController(controllerName,controllerTag)
-                .setInclude(includeType)
-                .transform(in);
-            System.out.println(
-                "generated "+viewName+" source file for "+controllerName);
-            return text;
-        } catch (IOException e) {
-            System.out.format("I/O error reading %s : %s\n", path.toString(), e.toString() );
-            return null;
-        }
-    }
-
-    void storeCode(Path dir, Path file, String text) {
-        var path = filePath(dir,file,".java");
-        try ( var out = Files.newBufferedWriter(path)) {
-            out.write(text);
-        }
-        catch (IOException e) {
-            System.out.format("I/O error writing %s : %s\n", path.toString(), e.toString() );
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    static Path filePath(Path dir, Path file, String suffix) {
-        var name = fileName(file.getFileName());
-        return dir.resolve(file).getParent().resolve(name+suffix);
-    }
-
-    static String fileName(Path path) {
-        var name = path.toString();
-        var p = name.lastIndexOf('.');
-        return p < 0 ? name : name.substring(0,p);
-    }
-
-    static String defaultValue(Class<?> annotation, String name) {
-        try {
-            return String.valueOf(annotation.getDeclaredMethod(name).getDefaultValue());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    static Forms forms() {
-      return new Forms() {
-
+    try {
+      Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
         @Override
-        Form makeForm(String className) {
-            if (className != null && !className.isBlank()) {
-                try {
-                    var c = Class.forName(className);
-                    return new Form(className,properties(c),interfaces(c),superclass(c));
-                }
-                catch (Exception e) {
-                    System.err.println(className+" : "+e.toString());
-                    e.printStackTrace();
-                }
-            }
-            return null;
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+          if (attrs.isRegularFile() && matcher.matches(file)) {
+            set.add(file);
+          }
+          return FileVisitResult.CONTINUE;
         }
+      });
+    } catch (IOException e) { throw new UncheckedIOException(e); }
 
-        Map<String,String> properties(Class<?> c) {
-            var map = new HashMap<String,String>();
-            for (var m:c.getMethods()) {
-                // TODO: check parameter count = 0
-                var name = property(m.getName());
-                if (name != null) {
-                    map.put(name,m.getReturnType().getName());
-                }
-            }
-            return map;
-        }
-
-        Set<String> interfaces(Class<?> c) {
-            var set = new HashSet<String>();
-            for (var i:c.getInterfaces()) {
-                set.add(i.getName());
-            }
-            return set;
-        }
-
-        Form superclass(Class<?> c) {
-            var sc = c.getSuperclass();
-            return sc != null ? get(sc.getName()) : null;
-        }
-
-      };
+    if (set.size() == n) {
+      System.out.println("no files found: "+path);
     }
+  }
+
+  static char[] readChars(Path file) {
+    try { return Files.readString(file).toCharArray(); }
+    catch (IOException e) { throw new UncheckedIOException(e); }
+  }
+
+  static void writeChars(Path file, CharSequence chars) {
+    try { Files.writeString(file,chars); }
+    catch (IOException e) { throw new UncheckedIOException(e); }
+  }
+
+  static Path mkDirs(Path file) {
+    try { Files.createDirectories(file.getParent()); return file; }
+    catch (IOException e) { throw new UncheckedIOException(e); }
+  }
+
+  record Part( String name, String suffix ) {}
+
+  static Part fileName(Path path) {
+    var f = path.getFileName().toString();
+    var i = f.lastIndexOf('.');
+    return i < 0 ? new Part( f, "" )
+                 : new Part( f.substring(0,i), f.substring(i+1) );
+  }
 
 }
