@@ -8,7 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface View {
-    String value();
-    String nodeType() default "javafx.scene.Parent";
-    String includeType() default "fx.mvc.util.Views.include";
+  String value();
+  String nodeType() default "javafx.scene.Parent";
+  String includeFunction() default "fx.mvc.util.Views.include";
 }

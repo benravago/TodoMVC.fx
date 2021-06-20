@@ -6,45 +6,46 @@ import javafx.beans.property.SimpleListProperty;
 import javafx.scene.control.Label;
 import javafx.scene.control.ToggleGroup;
 
-import todomvc.fx.Repository;
+import todomvc.fx.data.Repository;
 
 public class ToolsController {
 
-    @FXML
-    Label itemsLeftLabel;
-    
-    @FXML
-    ToggleGroup stageGroup;
+  @FXML
+  Label itemsLeftLabel;
 
-    final Repository repository;
+  @FXML
+  ToggleGroup stateGroup;
 
-    public ToolsController() {
-        this.repository = Repository.getInstance();
-    }
+  final Repository repository;
 
-    public void initialize() {
-        var openItemsProperty =
-            new SimpleListProperty<>(repository.openItemsProperty());
+  public ToolsController() {
+    this.repository = Repository.getInstance();
+  }
 
-        itemsLeftLabel.textProperty().bind(
-            Bindings.createStringBinding(() -> {
-                var size = openItemsProperty.getSize();
-                var itemsText = size == 1 ? "item" : "items";
-                return size + " " + itemsText + " left";
-            },
-            openItemsProperty.sizeProperty())
-        );
-    }
+  public void initialize() {
+    var openItemsProperty =
+      new SimpleListProperty<>(repository.openItemsProperty());
 
-    public void all() {
-        repository.showAllItems();
-    }
+    itemsLeftLabel.textProperty().bind(
+      Bindings.createStringBinding(() -> {
+        var size = openItemsProperty.getSize();
+        var itemsText = size == 1 ? "item" : "items";
+        return size + " " + itemsText + " left";
+      },
+      openItemsProperty.sizeProperty())
+    );
+  }
 
-    public void active() {
-        repository.showOpenItems();
-    }
+  public void all() {
+    repository.showAllItems();
+  }
 
-    public void completed() {
-        repository.showCompletedItems();
-    }
+  public void active() {
+    repository.showOpenItems();
+  }
+
+  public void completed() {
+    repository.showCompletedItems();
+  }
+
 }

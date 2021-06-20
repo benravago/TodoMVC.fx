@@ -10,8 +10,8 @@ class JbmlDriver implements JbmlListener {
   NodeBuilder gen;
 
   String transform(String name, char[] input) {
-    transform(input, new NodeBuilder());
-    return gen.view(name);
+    transform(input, new NodeBuilder(name));
+    return gen.view();
   }
 
   void transform(char[] input, NodeBuilder target) {
@@ -42,6 +42,6 @@ class JbmlDriver implements JbmlListener {
 
   void property(String name, Object value) {
     if (name == null) gen.varArg(value);
-    else gen.setProperty(name, value);
+    else gen.varProperty(name, value);
   }
 }

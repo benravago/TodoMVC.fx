@@ -8,5 +8,5 @@ import java.lang.annotation.ElementType;
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Factory {
-    String method() default "getInstance";
+  String method() default "getInstance";
 }

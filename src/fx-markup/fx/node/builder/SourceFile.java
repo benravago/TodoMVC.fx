@@ -24,7 +24,8 @@ import javax.annotation.processing.ProcessingEnvironment;
 //  2. set '-Asourcepath=src,dirs'
 
 /**
- * TODO: why this hack?
+ * Polyfill for '-sourcepath' command line option as provided by the OpenJDK javac tool;
+ * in case the current annotation processor does not provide a similar service.
  */
 class SourceFile {
 
@@ -54,16 +55,12 @@ class SourceFile {
     return src != null ? src.split(",") : null;
   }
 
-  // working dir = ${user.home}
-
   static Path sourceFile(String root, String[] dirs, String path, String file) {
     for (var dir : dirs) {
-      // try {
-        var source = Paths.get(root, dir.trim(), path, file);
-        if (Files.isRegularFile(source)) {
-          return source;
-        }
-      // } catch (IOException ignore) {}
+      var source = Paths.get(root, dir.trim(), path, file);
+      if (Files.isRegularFile(source)) {
+        return source;
+      }
     }
     return null;
   }

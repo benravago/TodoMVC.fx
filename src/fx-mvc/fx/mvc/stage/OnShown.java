@@ -8,7 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface OnShown {
-    String method() default "onShown";
-    String event() default "javafx.stage.WindowEvent";
-    String eventType() default "WINDOW_SHOWN";
+  String method() default "onShown";
+  String event() default "javafx.stage.WindowEvent";
+  String eventType() default "WINDOW_SHOWN";
 }

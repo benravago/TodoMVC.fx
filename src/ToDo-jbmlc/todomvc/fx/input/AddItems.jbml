@@ -1,0 +1,32 @@
+package todomvc.fx.input
+
+import javafx.scene.control.CheckBox
+import javafx.scene.control.TextField
+import javafx.scene.layout.HBox
+import java.net.URL
+
+HBox {
+
+  fx.controller: AddItemsController,
+
+  alignment: CENTER_LEFT,
+
+  styleClass: "add_item_root",
+
+  children: [
+
+    CheckBox {
+      fx.id: "selectAll",
+      visible: false
+    },
+  
+    TextField {
+      fx.id: "addInput",
+      promptText: "What needs to be done?",
+      HBox.hgrow: ALWAYS
+    }
+  ],
+
+  stylesheets: URL("@additems.css")
+
+} 

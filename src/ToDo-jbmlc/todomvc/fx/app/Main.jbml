@@ -1,0 +1,29 @@
+package todomvc.fx.app
+
+import javafx.scene.control.Label
+import javafx.scene.layout.VBox
+import java.net.URL
+
+VBox {
+
+  alignment: CENTER,
+
+  children: [
+
+    Label {
+      id: "title",
+      text: "todos"
+    },
+
+    fx.include("../input/AddItems"),
+
+    fx.include("../list/ItemList") {
+      VBox.vgrow: ALWAYS
+    },
+
+    fx.include("../tools/Tools")
+  ],
+
+  stylesheets: URL("@main.css")
+
+} 

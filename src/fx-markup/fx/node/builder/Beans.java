@@ -14,7 +14,8 @@ abstract class Beans {
     STRING = 'S',
     NUMBER = 'N',
     BOOLEAN = 'B',
-    NULL = 'U';
+    NULL = 'U',
+    ENUM = 'E';
 
   class Bean {
     String type; // Class<?>
@@ -94,25 +95,15 @@ abstract class Beans {
     return prop;
   }
 
-  abstract
-  void log(String msg);
+  abstract void log(String msg);
 
-  abstract
-  Bean beanOf(String name);
-  abstract
-  Property propertyOf(Bean bean, String property);
+  abstract Bean beanOf(String name);
+  abstract Property propertyOf(Bean bean, String property);
 
-  abstract
-  boolean isAssignable(String t1, String t2);
+  abstract String defaultProperty(Bean bean);
+  abstract <T> T defaultValue(String annotation, String name);
 
-  boolean isSubtype(String t1, String t2) { return false; } // TODO: currently not used
-  boolean isSameType(String t1, String t2) { return t1.equals(t2); } // simple implementation
-
-  abstract
-  String defaultProperty(Bean bean);
-
-  abstract
-  String[][] namedArg(Bean bean);
+  abstract String[][] namedArg(Bean bean);
 
   String[][] signatures(Bean bean) {
     var sig = namedArg(bean);
@@ -136,7 +127,6 @@ abstract class Beans {
     }
     return sig;
   }
-
 
   static String proper(String s) {
     return Character.toUpperCase(s.charAt(0)) + s.substring(1);

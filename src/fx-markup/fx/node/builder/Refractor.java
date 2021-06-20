@@ -9,7 +9,6 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.PrimitiveType;
-import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -28,12 +27,13 @@ class Refractor extends Beans { // use java.lang.model.* api
     setUp();
   }
 
+  final Messager messager;
+
   @Override
   void log(String msg) { messager.printMessage(Kind.NOTE,msg); };
 
   final Elements elements;
   final Types types;
-  final Messager messager;
 
   @Override
   Bean beanOf(String fqcn) {
@@ -110,9 +110,6 @@ class Refractor extends Beans { // use java.lang.model.* api
     return v != null ? proper(v) : childrenProperty(te);
   }
 
-  // TODO: _8.getnull().add(_9);
-
-
   String childrenProperty(TypeElement pt) {
     for (var te = pt; te != null; te = superclass(te)) {
       for (var p:te.getEnclosedElements()) {
@@ -164,32 +161,44 @@ class Refractor extends Beans { // use java.lang.model.* api
     return null;
   }
 
+  @SuppressWarnings("unchecked")
   @Override
-  boolean isAssignable(String from, String to) {
-    var t1 = elements.getTypeElement(from).asType();
-    var t2 = elements.getTypeElement(to).asType();
-    return types.isAssignable(t1,t2);
+  <T> T defaultValue(String annotation, String name) {
+    var a = elements.getTypeElement(annotation);
+    if (a != null) {
+      for (var p:a.getEnclosedElements()) {
+        if (p.getKind() == ElementKind.METHOD && p instanceof ExecutableElement e) {
+          if (e.getSimpleName().contentEquals(name)) return (T) e.getDefaultValue().getValue();
+        }
+      }
+    }
+    return null;
   }
 
   int isA(TypeMirror t) {
-    var k = t.getKind();
-    if (k.isPrimitive()) {
-      return k == TypeKind.BOOLEAN ? BOOLEAN : NUMBER;
-    } else {
-      return switch (k) {
-        case ARRAY -> ARRAY;
-        case DECLARED -> isObject(t);
-        case NULL, VOID -> NULL;
-        default -> NULL;
-      };
-    }
+    return switch(t.getKind()) {
+      case BOOLEAN -> BOOLEAN;
+      case BYTE, CHAR, SHORT, INT, LONG, FLOAT, DOUBLE -> NUMBER;
+      case ARRAY -> ARRAY;
+      case DECLARED -> declared((DeclaredType)t);
+      default -> NULL;
+    };
   }
 
-  int isObject(TypeMirror t) {
-    if (types.isAssignable(t,jlCharSequence)) return STRING;
-    if (types.isAssignable(t,jlNumber)) return NUMBER;
-    if (types.isAssignable(t,jlBoolean)) return BOOLEAN;
-    if (types.isAssignable(t,juCollection)) return ARRAY;
+  int declared(DeclaredType t) {
+    return switch (t.asElement().getKind()) {
+      case ENUM -> ENUM;
+      case CLASS, INTERFACE -> assignable(t);
+      default -> NULL;
+    };
+  }
+
+  int assignable(TypeMirror t) {
+    var e = types.erasure(t); // remove <E> for isAssignable(); for jdk's javac
+    if (types.isAssignable(e,jlCharSequence)) return STRING;
+    if (types.isAssignable(e,juCollection)) return ARRAY;
+    if (types.isAssignable(e,jlNumber)) return NUMBER;
+    if (types.isAssignable(e,jlBoolean)) return BOOLEAN;
     return OBJECT;
   }
 

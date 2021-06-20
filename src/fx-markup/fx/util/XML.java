@@ -5,6 +5,11 @@ import javax.xml.namespace.QName;
 
 public interface XML {
 
+  static String prefix(String name) {
+    var p = name.lastIndexOf('.');
+    return p < 0 ? "" : name.substring(0,p);
+  }
+
   static String name(QName q) {
     var p = q.getPrefix();
     var l = q.getLocalPart();
@@ -27,6 +32,5 @@ public interface XML {
     if (m.usePattern(bool).matches()) return v;
     return '"'+String.valueOf(v)+'"';
   }
-
 
 }

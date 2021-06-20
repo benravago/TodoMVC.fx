@@ -10,11 +10,10 @@ import javax.xml.stream.events.ProcessingInstruction;
 import javax.xml.stream.events.StartElement;
 import static javax.xml.stream.XMLStreamConstants.*;
 
-import static fx.node.builder.Beans.*;
-
-import fx.util.FIFO;
 import fx.util.LIFO;
+import fx.util.FIFO;
 import static fx.util.XML.*;
+import static fx.node.builder.Beans.*;
 
 class FxmlDriver {
 
@@ -23,8 +22,8 @@ class FxmlDriver {
   NodeBuilder gen;
 
   String transform(String name, char[] input) {
-    transform(input, new NodeBuilder());
-    return gen.view(name);
+    transform(input, new NodeBuilder(name));
+    return gen.view();
   }
 
   void transform(char[] input, NodeBuilder builder) {
@@ -55,72 +54,113 @@ class FxmlDriver {
     }
   }
 
-  int depth; // <Type> nesting depth
-  LIFO<String> defer = new LIFO<>(); // stack of <property>
-
-  void startElement(StartElement s) {
-    if (specialElement(s)) return;
-    var ident = name(s.getName());
-    var attr = attributes(s);
-    if (isProper(ident)) { // <Type ...>
-      gen.newVar(defer.peek(),ident);
-      var used = parameters(ident,attr);
-      gen.argEnd();
-      gen.varBody(null);
-      depth++;
-      if (used < attr.length) {
-        properties(attr);
-      }
+  void startElement(StartElement e) {
+    var tag = push(name(e.getName()));
+    if (isSpecial(tag,e)) {
+      // <URL>, <fx.include ..., etc
     } else {
-      if (attr.length == 0) {
-        defer.push(ident); // <property>
+      if (isProper(tag.name)) {
+        tag.isNode = true;
+        bean(tag,e); // <Type>
       } else {
-        // not expected: how to handle <property attribute="value">
+        property(tag,e); // <property>, <fx.define>, etc.
       }
     }
   }
 
-  int parameters(String ident, Attr[] attrs) {
-    var args = match(ident,attrs);
-    // feed attribute values in signature args order
-    for (var arg:args) {
+  void endElement(EndElement e) {
+    pop();
+  }
+
+  void characters(Characters e) {
+    var c = e.getData();
+    if (!c.isBlank()) {
+      System.err.printf("- characters: %s\n", c);
+    }
+    // TODO:
+    // 1. use the character data as text;
+    // 2. check current top of tags stack;
+    // 3. call gen.varProperty(name,value); assume this is OK
+  }
+
+
+  LIFO<Tag> tags = new LIFO<>();
+
+  class Tag {
+    Tag up;
+    String name;
+    Runnable end;
+    boolean isNode;
+  }
+
+  Tag push(String name) {
+    var t = new Tag();
+    t.up = tags.peek();
+    t.name = name;
+    tags.push(t);
+    return t;
+  }
+
+  Tag pop() {
+    var t = tags.pop();
+    if (t.end != null) t.end.run();
+    return t;
+  }
+
+  String label() {
+    var t = tags.peek();
+    if (t == null) return null;
+    t = t.up;
+    if (t == null || t.isNode) return null;
+    return t.name;
+  }
+
+  void property(Tag tag, StartElement e) {
+    if (e.getAttributes().hasNext()) {
+      gen.bp.log("property "+tag.name+" has unused attributes");
+    }
+    // TODO:
+    // 1. handle <children> -> call gen.newList(); set tag.end = gen::listEnd
+    // 2. mark as 'isList' for contained elements
+  }
+
+  void bean(Tag tag, StartElement e) { // startVar()
+    var attrs = attributes(e);
+    var args = arguments(attrs,tag.name);
+    gen.newVar(label(),tag.name);
+    parameters(attrs,args);
+    gen.argEnd();
+    gen.varBody(null);
+    if (args.length < attrs.length) {
+      properties(attrs);
+    }
+    tag.end = (tag.up != null && tag.up.isNode) ? this::addItem : gen::bodyEnd;
+  }
+
+  void addItem() {
+    gen.bodyEnd(); gen.itemEnd();
+  }
+
+  void parameters(Attr[] attrs, String...args) {
+    for (var i = 0; i < args.length; i++) {
+      var arg = args[i];
       for (var j = 0; j < attrs.length; j++) {
         var a = attrs[j];
-        if (a != null && a.name.equals(arg)) {
+        if (a != null && arg.equals(a.name)) {
           gen.varArg(a.value);
           attrs[j] = null; // remove from list
           break; // inner loop
         }
       }
     }
-    return args.length;
   }
 
   void properties(Attr[] attrs) {
+    // feed remaining attribute values
     for (var a:attrs) {
       if (a != null) {
-        gen.setProperty(a.name, a.value);
+        gen.varProperty(a.name, a.value);
       }
-    }
-  }
-
-  void endElement(EndElement e) {
-    var ident = name(e.getName());
-    if (isProper(ident)) { // </Type>
-      depth--;
-      gen.bodyEnd();
-      if (depth > 0 && defer.isEmpty()) {
-        gen.addItem(); // free-standing <Type ...>...</Type>
-      }
-    } else {
-      defer.pop(); // </property>
-    }
-  }
-
-  void characters(Characters e) {
-    var c = e.getData();
-    if (!c.isBlank()) {
-      System.out.printf("- characters: %s\n", c);
     }
   }
 
@@ -142,18 +182,17 @@ class FxmlDriver {
     return y;
   }
 
-  String[] match(String ident, Attr[] attrs) {
+  String[] arguments(Attr[] attrs, String tag) {
     // find a matching signature for the <Type>
-    var b = gen.bp.get(ident);
-    var args = gen.bp.signatures(b);
+    var args = gen.signatures(tag);
     if (args.length > 0) {
-      var i = match(args,attrs);
+      var i = match(attrs,args);
       if (i > -1) return args[i];
     }
     return new String[0];
   }
 
-  int match(String[][] args, Attr[] attrs) {
+  int match(Attr[] attrs, String[][] args) {
     SIG: for (var i = 0; i < args.length; i++) {
       var sig = args[i];
       ARG: for (var j = 0; j < sig.length; j++) {
@@ -168,16 +207,38 @@ class FxmlDriver {
     return -1; // no matching constructor signature
   }
 
-  boolean specialElement(StartElement s) {
-    if (s.getName().getLocalPart().equals("URL")) {
-      // <URL value="@resource" />
-      gen.newVar(defer.peek(),"URL");
-      var v = s.getAttributeByName(new QName("value"));
-      if (v != null) gen.varArg(v.getValue());
-      gen.argEnd();
-      return true;
+  boolean isSpecial(Tag tag, StartElement s) {
+    if ("URL".equals(tag.name)) {
+      urlVar(tag,s);
+    } else if ("fx.include".equals(tag.name)) {
+      includeVar(tag,s);
+    } else {
+      return false;
     }
-    return false;
+    return true;
+  }
+
+  void urlVar(Tag tag, StartElement s) { // <URL value="@resource" />
+    gen.newVar(label(),"URL");
+    var v = s.getAttributeByName(new QName("value"));
+    if (v != null) gen.varArg(v.getValue());
+    gen.argEnd();
+  }
+
+  void includeVar(Tag tag, StartElement s) { // <fx.include source="@ref" ... />
+    var attrs = attributes(s);
+    var label = label();
+    gen.newVar(label,"fx.include");
+    parameters(attrs,"source");
+    gen.argEnd();
+    if (attrs.length > 0) {
+      gen.varBody(null);
+      properties(attrs);
+      gen.bodyEnd();
+    }
+    if (label == null) {
+      tag.end = gen::itemEnd;
+    }
   }
 
   @SuppressWarnings("unchecked")

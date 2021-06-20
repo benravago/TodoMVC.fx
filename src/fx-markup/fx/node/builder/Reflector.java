@@ -23,6 +23,7 @@ class Reflector extends Beans { // use java.lang.reflect.* api
 
   static int isA(Type t) {
     if (t instanceof Class<?> c) {
+      if (Enum.class.isAssignableFrom(c)) return ENUM;
       if (CharSequence.class.isAssignableFrom(c)) return STRING;
       if (Collection.class.isAssignableFrom(c) || c.isArray()) return ARRAY;
       if (Boolean.class.isAssignableFrom(c) || Boolean.TYPE.equals(c)) return BOOLEAN;
@@ -86,18 +87,6 @@ class Reflector extends Beans { // use java.lang.reflect.* api
   }
 
   @Override
-  boolean isAssignable(String t1, String t2) {
-    try {
-      var c1 = Class.forName(t1);
-      var c2 = Class.forName(t2);
-      return c2.isAssignableFrom(c1);
-    } catch (Exception e) {
-      System.err.println("isAssignable: "+e);
-    }
-    return false;
-  }
-
-  @Override
   String defaultProperty(Bean bean) {
     var c = type(bean);
     var a = c.getAnnotation(DefaultProperty.class);
@@ -131,6 +120,16 @@ class Reflector extends Beans { // use java.lang.reflect.* api
       }
     }
     return sig;
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  <T> T defaultValue(String annotation, String name) {
+    try {
+      return (T) Class.forName(annotation).getMethod(name).getDefaultValue();
+    } catch (Exception e) {
+      return null;
+    }
   }
 
 }

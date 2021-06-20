@@ -15,74 +15,73 @@ import javafx.scene.Parent;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
 
-import todomvc.fx.Repository;
-import todomvc.fx.TodoItem;
+import todomvc.fx.data.Repository;
+import todomvc.fx.data.TodoItem;
 
 public class ItemListController {
 
-    @FXML
-    ListView<TodoItem> items;
+  @FXML
+  ListView<TodoItem> items;
 
-    final Map<TodoItem, Node> itemNodeCache = new HashMap<>();
+  final Map<TodoItem, Node> itemNodeCache = new HashMap<>();
 
-    final URL itemFxmlUrl;
+  final URL itemFxmlUrl;
 
-    final Repository repository;
+  final Repository repository;
 
-    public ItemListController() {
-        this.repository = Repository.getInstance();
+  public ItemListController() {
+    this.repository = Repository.getInstance();
 
-        var pathToItemFxml = "Item.fxml";
+    var pathToItemFxml = "Item.fxml";
 
-        itemFxmlUrl = this.getClass().getResource(pathToItemFxml);
+    itemFxmlUrl = getClass().getResource(pathToItemFxml);
 
-        if (itemFxmlUrl == null) {
-            throw new IllegalStateException("Can't find Item.fxml file with path: " + pathToItemFxml);
-        }
+    if (itemFxmlUrl == null) {
+      throw new IllegalStateException("Can't find Item.fxml file with path: " + pathToItemFxml);
     }
+  }
 
-    public void initialize() {
+  public void initialize() {
 
-        items.setItems(repository.itemsProperty());
+    items.setItems(repository.itemsProperty());
 
-        items.setCellFactory(value -> new ListCell<TodoItem>() {
-            @Override
-            protected void updateItem(TodoItem item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty) {
-                    setText(null);
-                    setGraphic(null);
-                } else {
-                    setText(null);
+    items.setCellFactory(value -> new ListCell<TodoItem>() {
+      @Override
+      protected void updateItem(TodoItem item, boolean empty) {
+        super.updateItem(item, empty);
+        if (empty) {
+          setText(null);
+          setGraphic(null);
+        } else {
+          setText(null);
 
-                    if (!itemNodeCache.containsKey(item)) {
-                        var parent = loadItemView(item);
-                        itemNodeCache.put(item, parent);
-                    }
+          if (!itemNodeCache.containsKey(item)) {
+            var parent = loadItemView(item);
+            itemNodeCache.put(item, parent);
+          }
 
-                    var node = itemNodeCache.get(item);
+          var node = itemNodeCache.get(item);
 
-                    var currentNode = getGraphic();
-                    if (currentNode == null || !currentNode.equals(node)) {
-                        setGraphic(node);
-                    }
-                }
-            }
-        });
-
-    }
-
-    Parent loadItemView(TodoItem item) {
-        var fxmlLoader = new FXMLLoader(itemFxmlUrl);
-        try {
-            var itemController = new ItemController(item, repository);
-            fxmlLoader.setController(itemController);
-            fxmlLoader.load();
-            return fxmlLoader.getRoot();
+          var currentNode = getGraphic();
+          if (currentNode == null || !currentNode.equals(node)) {
+            setGraphic(node);
+          }
         }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+      }
+    });
+
+  }
+
+  Parent loadItemView(TodoItem item) {
+    var fxmlLoader = new FXMLLoader(itemFxmlUrl);
+    try {
+      var itemController = new ItemController(item, repository);
+      fxmlLoader.setController(itemController);
+      fxmlLoader.load();
+      return fxmlLoader.getRoot();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
+  }
 
 }

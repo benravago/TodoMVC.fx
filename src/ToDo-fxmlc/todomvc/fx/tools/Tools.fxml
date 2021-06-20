@@ -12,9 +12,9 @@
 
   <Label fx:id="itemsLeftLabel" text="X items left" />
   <HBox spacing="10.0">
-    <fx:define>  
+    <fx:define>
       <ToggleGroup fx:id="stateGroup" />
-    </fx:define>  
+    </fx:define>
     <ToggleButton fx:id="showAll" mnemonicParsing="false" onAction="#all" selected="true" text="All" toggleGroup="$stateGroup"/>
     <ToggleButton fx:id="showActive" mnemonicParsing="false" onAction="#active" text="Active" toggleGroup="$stateGroup"/>
     <ToggleButton fx:id="showCompleted" mnemonicParsing="false" onAction="#completed" text="Completed" toggleGroup="$stateGroup"/>

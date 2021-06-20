@@ -17,9 +17,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-// TODO: ViewCompiler -s <directory> -> specify where to place generated source files
-//                    -c             -> generate class prototypes
-//                    <file|glob> ... ->
+// ViewCompiler -s <directory> -> specify where to place generated source files
+//              -c             -> generate class prototypes
+//              -r <directory> ->
+//              <file|glob> ...
 
 public class ViewCompiler {
   public static void main(String...args) throws Exception {
@@ -34,25 +35,30 @@ public class ViewCompiler {
 
     var files = new ArrayList<String>();
     var proto = false;
-    Path dir = null;
+    Path dir = null, root = null;
 
     for (var i = 0; i < args.length; i++) {
       switch (args[i]) {
         case "-s" -> dir = Paths.get(args[++i]);
+        case "-r" -> root = Paths.get(args[++i]);
         case "-c" -> proto = true;
         default -> files.add(args[i]);
       }
     }
 
     Beans.provider = () -> new Reflector();
-    generate(dir,files,proto);
+    generate(dir,files,proto,root);
   }
 
-  void generate(Path dir, List<String> files, boolean proto) {
+  void generate(Path dir, List<String> files, boolean proto, Path root) {
     for (var file : find(files)) {
 
-      var gen = new NodeBuilder();
       var part = fileName(file);
+      var gen = new NodeBuilder(part.name);
+      if (root != null) {
+        var pkg = root.relativize(file).getParent();
+        gen.setPackage(pkg.toString().replace('/','.'));
+      }
       switch (part.suffix) {
         case "fxml" -> new FxmlDriver().transform(readChars(file),gen);
         case "jbml" -> new JbmlDriver().transform(readChars(file),gen);
@@ -61,7 +67,7 @@ public class ViewCompiler {
           continue;
         }
       }
-      var text = gen.view(part.name);
+      var text = gen.view();
       var dest = target(dir,file,gen.packageName,part.name);
       writeChars(dest,text);
       System.out.printf("generated %s from %s\n", dest.toString(), file.toString());

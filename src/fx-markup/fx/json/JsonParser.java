@@ -134,16 +134,13 @@ public class JsonParser<CH extends JsonListener> {
           if (c == '[') {
             array();
           } else {
-            if (c == 't') {
-              token("true");
+            if (token("true")) {
               handler.booleanValue(name, Boolean.TRUE);
             } else {
-              if (c == 'f') {
-                token("false");
+              if (token("false")) {
                 handler.booleanValue(name, Boolean.FALSE);
               } else {
-                if (c == 'n') {
-                  token("null");
+                if (token("null")) {
                   handler.nullValue(name);
                 } else {
                   if (!specialValue(c)) {
@@ -158,13 +155,16 @@ public class JsonParser<CH extends JsonListener> {
     }
   }
 
-  void token(String s) {
+  boolean token(String s) {
+    var mark = position;
     var n = s.length();
     for (var i = 1; i < n; i++) {
       if (s.charAt(i) != buf[position++]) {
-        throw new ParseException(invalid());
+        position = mark;
+        return false;
       }
     }
+    return true;
   }
 
   void string() {

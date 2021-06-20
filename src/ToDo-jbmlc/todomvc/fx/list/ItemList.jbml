@@ -1,0 +1,21 @@
+package todomvc.fx.list
+
+import javafx.scene.control.ListView
+import javafx.scene.layout.AnchorPane
+
+AnchorPane {
+
+  fx.controller: todomvc.fx.list.ItemListController,
+
+  children: [
+
+    ListView {
+      fx.id: "items",
+      AnchorPane.topAnchor: 0.0,
+      AnchorPane.rightAnchor: 0.0,
+      AnchorPane.leftAnchor: 0.0,
+      AnchorPane.bottomAnchor: 0.0
+    }
+  ]
+
+} 
