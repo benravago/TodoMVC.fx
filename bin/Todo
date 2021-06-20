@@ -1,2 +1,0 @@
-#
-if [ $# -eq 1 ]; then $0-$1; else echo "usage: $0 [ fxml | fxmlc ]"; fi
