@@ -1,2 +1,3 @@
-Update: added support for a JSON-based markup language; build scripts will need rework as well.
+Update: added support for a JSON-based markup language
 
+Do <code>make</code> to see build targets.
