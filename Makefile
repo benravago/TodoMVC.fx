@@ -15,7 +15,7 @@ default:
 
 # ToDoMVC.fx reference application
 todo: lib/ToDo-fx.jar
-	echo !!! $@ $^
+	$(JAVA) -cp $< -p $(JFX)/lib --add-modules javafx.controls $(APP)
 
 # ToDo with fxml
 todo-fxml: lib/ToDo-fxml.jar
@@ -30,7 +30,12 @@ todo-jbmlc: lib/ToDo-jbmlc.jar lib/fx-mvc.jar
 	$(JAVA) -cp $(call classpath,$^) -p $(JFX)/lib --add-modules javafx.controls $(APP)
 
 lib/ToDo-fx.jar: src/ToDo-fx
-	echo !!! $@ $^
+	@rm -fr bin
+	@mkdir -p bin
+	$(JAVAC) -d bin -p $(JFX)/lib --add-modules javafx.controls -sourcepath $< $(shell find $< -name '*.java')
+	pushd $<; find . -type f -not -name '*.java' -exec cp --parents {} ../../bin/ ';'; popd
+	@mkdir -p lib
+	$(JAR) -cf $@ -C bin .
 
 lib/ToDo-fxml.jar: src/ToDo-fxml
 	@rm -fr bin
@@ -77,6 +82,3 @@ clean:
 	rm -fr bin
 	rm -fr lib
 
-#nil =
-#sp = $(nil) $(nil)
-#$(JAVA) -cp $(subst $(sp),:,$^) -p $(JFX)/lib --add-modules javafx.controls $(APP)
