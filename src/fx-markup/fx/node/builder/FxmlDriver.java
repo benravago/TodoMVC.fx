@@ -137,9 +137,7 @@ class FxmlDriver {
     tag.end = (tag.up != null && tag.up.isNode) ? this::addItem : gen::bodyEnd;
   }
 
-  void addItem() {
-    gen.bodyEnd(); gen.itemEnd();
-  }
+  void addItem() { gen.bodyEnd(); gen.itemEnd(); }
 
   void parameters(Attr[] attrs, String...args) {
     for (var i = 0; i < args.length; i++) {

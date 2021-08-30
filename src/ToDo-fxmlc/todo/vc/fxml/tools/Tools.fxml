@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.HBox?>
+
+<HBox xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1"
+    fx:controller="todo.vc.fxml.tools.ToolsController"
+    alignment="CENTER" spacing="20.0" >
+
+  <Label fx:id="itemsLeftLabel" text="X items left" />
+  <HBox spacing="10.0">
+    <fx:define>
+      <ToggleGroup fx:id="stateGroup" />
+    </fx:define>
+    <ToggleButton fx:id="showAll" mnemonicParsing="false" onAction="#all" selected="true" text="All" toggleGroup="$stateGroup"/>
+    <ToggleButton fx:id="showActive" mnemonicParsing="false" onAction="#active" text="Active" toggleGroup="$stateGroup"/>
+    <ToggleButton fx:id="showCompleted" mnemonicParsing="false" onAction="#completed" text="Completed" toggleGroup="$stateGroup"/>
+
+    <padding>
+      <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+    </padding>
+
+  </HBox>
+
+  <padding>
+    <Insets bottom="5.0" left="5.0" right="5.0" top="5.0"/>
+  </padding>
+
+</HBox>

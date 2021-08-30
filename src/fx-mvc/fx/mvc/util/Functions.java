@@ -5,7 +5,6 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 
@@ -31,16 +30,17 @@ final class Functions {
       var invoked = abstractMethod(functionalInterface);
       var invokedType = MethodType.methodType(functionalInterface, implType);
       var samMethodType = methodType(invoked);
+      System.out.println("sam "+samMethodType);
       var implMethod = caller.unreflect(method);
       var instantiatedMethodType = methodType(method);
+      System.out.println("ins "+instantiatedMethodType);
 
-      var callSite = LambdaMetafactory.metafactory(caller,
-        invoked.getName(), invokedType, samMethodType, implMethod, instantiatedMethodType);
+      var callSite = LambdaMetafactory.metafactory(
+        caller, invoked.getName(), invokedType, samMethodType, implMethod, instantiatedMethodType);
 
       return (T) callSite.getTarget().bindTo(impl).invoke();
-    } catch (Throwable e) {
-      return uncheck(e);
     }
+    catch (Throwable e) { return uncheck(e); }
   }
 
   static Method abstractMethod(Class<?> c) {
@@ -61,14 +61,6 @@ final class Functions {
   static MethodHandle methodHandle(Class<?> type, Method method) {
     try {
       return privateLookup.get(type).unreflect(method);
-    } catch (Throwable e) {
-      return uncheck(e);
-    }
-  }
-
-  static MethodHandle constructorHandle(Class<?> type, Constructor<?> constructor) {
-    try {
-      return privateLookup.get(type).unreflectConstructor(constructor);
     } catch (Throwable e) {
       return uncheck(e);
     }
@@ -104,7 +96,9 @@ final class Functions {
     var ptypes = new Class<?>[args.length];
     for (var i = 0; i < ptypes.length; i++) {
       var arg = args[i];
-      if (arg != null) ptypes[i] = arg.getClass();
+      if (arg != null) {
+        ptypes[i] = arg.getClass();
+      }
     }
     return ptypes;
   }

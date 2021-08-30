@@ -8,6 +8,7 @@ import javafx.stage.Window;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.beans.DefaultProperty;
+// com.sun.javafx.beans.IDProperty
 
 public final class Lookup {
 
@@ -26,7 +27,9 @@ public final class Lookup {
   public <T> T get(String name) {
     if (name != null && !name.isBlank()) {
       try { return (T) lookup(root, name); }
-      catch (Throwable ignore) {}
+      catch (Throwable ignore) {
+        ignore.printStackTrace();
+      }
     }
     return null;
   }
@@ -43,7 +46,9 @@ public final class Lookup {
       if (content instanceof List<?> list) {
         for (var item : list) {
           var t = lookup(item, id);
-          if (t != null) return t;
+          if (t != null) {
+            return t;
+          }
         }
       } else if (content != null) {
         return lookup(content, id);

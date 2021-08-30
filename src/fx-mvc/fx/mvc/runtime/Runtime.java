@@ -11,18 +11,14 @@ import javafx.stage.Stage;
 
 import fx.mvc.stage.OnShowing;
 import fx.mvc.stage.OnShown;
+import fx.mvc.util.Controllers;
 import static fx.mvc.util.Events.addEventHandler;
-import static fx.mvc.util.Views.loadController;
 
 public final class Runtime {
-  private Runtime() {
-  }
+  private Runtime() {}
 
   private static final Runtime INSTANCE = new Runtime();
-
-  public static Runtime getRuntime() {
-    return INSTANCE;
-  }
+  public static Runtime getRuntime() { return INSTANCE; }
 
   public Future<Throwable> launch(Class<?> appClass, String... args) {
     return launch(appClass.getName(), args);
@@ -31,20 +27,21 @@ public final class Runtime {
   public synchronized Future<Throwable> launch(String className, String... src) {
     var dest = new String[1 + src.length];
     dest[0] = className;
-    if (src.length > 0)
+    if (src.length > 0) {
       System.arraycopy(src, 0, dest, 1, src.length);
+    }
     return launchApplication(dest);
   }
 
-  private static final InheritableThreadLocal<Object[]> app = new InheritableThreadLocal<>(); // { primaryApplication,
-                                                                                              // primaryStage, thrown }
+  private static final InheritableThreadLocal<Object[]> app =
+    new InheritableThreadLocal<>(); // { primaryApplication, primaryStage, thrown }
 
   Future<Throwable> launchApplication(String... args) {
     app.set(new Object[3]);
     var running = new Running();
     new Thread(() -> {
       try {
-        Application.launch(Primary.class, args);
+        Application.launch(Main.class, args);
         // on return, the 'JavaFX Application Thread' has ended
         // signal fault in App.start(), if any
         running.put((Throwable) app.get()[2]);
@@ -56,7 +53,7 @@ public final class Runtime {
     return running;
   }
 
-  public static final class Primary extends Application {
+  public static final class Main extends Application {
     @Override
     public void start(Stage primaryStage) {
       try {
@@ -64,12 +61,12 @@ public final class Runtime {
         info[0] = this;
         info[1] = primaryStage;
         var className = getParameters().getRaw().get(0);
-        var cv = loadController(className);
+        var cv = Controllers.forName(className);
         var controller = cv.getKey();
-        Parent root = (Parent) cv.getValue();
+        var view = (Parent) cv.getValue();
         addEventHandler(primaryStage, controller, OnShowing.class);
         addEventHandler(primaryStage, controller, OnShown.class);
-        Scene scene = new Scene(root);
+        var scene = new Scene(view);
         primaryStage.setScene(scene);
         primaryStage.show();
       } catch (Throwable t) {
@@ -82,8 +79,9 @@ public final class Runtime {
 
   private Application getApplication() {
     var info = app.get();
-    if (info[0] != null)
+    if (info[0] != null) {
       return (Application) info[0];
+    }
     throw new IllegalStateException("no javafx.application.Application has been launched");
   }
 
@@ -108,4 +106,6 @@ public final class Runtime {
     Application.setUserAgentStylesheet(url);
   }
 
+  // TODO: maybe support javafx.application.Preloader
+  // and related javafx.application.Application#notifyPreloader(info)
 }
